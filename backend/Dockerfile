@@ -3,7 +3,6 @@
 # ================================
 FROM php:8.2-apache AS builder
 
-# Set working directory
 WORKDIR /var/www/html
 
 # Install system dependencies
@@ -16,47 +15,45 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-install pdo_mysql zip \
     && a2enmod rewrite
 
-# Copy composer and install dependencies
+# Copy Composer from official image
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Copy only composer files first to leverage Docker caching
-COPY composer.json composer.lock ./
-
-# Install production dependencies only (no-dev)
-RUN composer install --no-dev --no-interaction --optimize-autoloader --prefer-dist
-
-# Copy application code
+# Copy *entire* Laravel project (to ensure artisan exists)
 COPY . .
 
-# Make sure Laravel folders are writable
+# Install dependencies (disable scripts to avoid artisan error)
+RUN composer install --no-dev --no-interaction --optimize-autoloader --prefer-dist --no-scripts
+
+# Then manually run Laravel optimization commands after vendor exists
+RUN php artisan config:clear || true \
+    && php artisan cache:clear || true \
+    && php artisan route:clear || true \
+    && php artisan view:clear || true \
+    && php artisan optimize || true
+
+# Fix permissions
 RUN chown -R www-data:www-data storage bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
 
 # ================================
-# Stage 2: Final Production Image
+# Stage 2: Production image
 # ================================
 FROM php:8.2-apache
 
 WORKDIR /var/www/html
 
-# Copy Apache configuration for Laravel
-COPY --from=builder /etc/apache2/sites-available/000-default.conf /etc/apache2/sites-available/000-default.conf
-
-# Enable Apache rewrite
-RUN a2enmod rewrite
-
-# Copy the built app from the builder stage
+# Copy built app from builder
 COPY --from=builder /var/www/html /var/www/html
 
-# Set ownership
+# Enable mod_rewrite (Laravel routes)
+RUN a2enmod rewrite
+
+# Correct Apache permissions
 RUN chown -R www-data:www-data /var/www/html
 
-# Expose Apache port
 EXPOSE 80
 
-# Health check endpoint (optional)
 HEALTHCHECK --interval=30s --timeout=5s \
-    CMD curl -f http://localhost/health || exit 1
+    CMD curl -f http://localhost || exit 1
 
-# Start Apache in foreground
 CMD ["apache2-foreground"]
