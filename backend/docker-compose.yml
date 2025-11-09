@@ -13,11 +13,16 @@ services:
       - SERVICE_NAME=app
     networks:
       - proxy
-
-volumes:
-  mysql_data:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nest-app.rule=Host(`${VALLETTA_DOMAIN}`)"
+      - "traefik.http.routers.nest-app.entrypoints=websecure"
+      - "traefik.http.routers.nest-app.tls=true"
+      - "traefik.http.routers.nest-app.tls.certresolver=le"
 
 networks:
   proxy:
-    proxy
-  external: true
+    name: proxy
+    external: true
+volumes:
+  mysql_data:
