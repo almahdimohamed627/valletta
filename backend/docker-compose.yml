@@ -1,16 +1,19 @@
+
+
 services:
   valletta:
     build:
       context: .
       dockerfile: Dockerfile
+    image: valletta:latest
     container_name: valletta
     restart: unless-stopped
     ports:
-      - '8000:80'
-    volumes:
-      - .:/var/www
+      - "8000:80" # expose on localhost for debugging or Jenkins
     environment:
-      - SERVICE_NAME=valletta
+      APP_ENV: production
+      APP_DEBUG: "false"
+      SERVICE_NAME: valletta
     networks:
       - proxy
     labels:
@@ -23,5 +26,4 @@ services:
 
 networks:
   proxy:
-    name: proxy
     external: true
