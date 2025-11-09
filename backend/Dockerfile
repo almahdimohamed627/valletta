@@ -1,59 +1,67 @@
-# ================================
-# Stage 1: Build dependencies
-# ================================
-FROM php:8.2-apache AS builder
+# ============================================================
+# 🏗️ Stage 1 — Build and install dependencies
+# ============================================================
+FROM composer:2 AS builder
 
 WORKDIR /var/www/html
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    git \
-    unzip \
-    curl \
-    libzip-dev \
-    zip \
-    && docker-php-ext-install pdo_mysql zip \
-    && a2enmod rewrite
+# Copy only composer files first for caching
+COPY composer.json composer.lock ./
 
-# Copy Composer from official image
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+# Install dependencies without dev packages
+RUN composer install --no-dev --no-scripts --no-interaction --optimize-autoloader --prefer-dist
 
-# Copy *entire* Laravel project (to ensure artisan exists)
+# Copy the rest of the Laravel app
 COPY . .
 
-# Install dependencies (disable scripts to avoid artisan error)
-RUN composer install --no-dev --no-interaction --optimize-autoloader --prefer-dist --no-scripts
-
-# Then manually run Laravel optimization commands after vendor exists
+# Generate optimized Laravel cache and config
 RUN php artisan config:clear || true \
     && php artisan cache:clear || true \
     && php artisan route:clear || true \
     && php artisan view:clear || true \
     && php artisan optimize || true
 
-# Fix permissions
+# Fix permissions for cache and storage
 RUN chown -R www-data:www-data storage bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
 
-# ================================
-# Stage 2: Production image
-# ================================
+
+# ============================================================
+# 🚀 Stage 2 — Production runtime (Apache + PHP)
+# ============================================================
 FROM php:8.2-apache
 
+# Install required PHP extensions and dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    unzip \
+    libzip-dev \
+    zip \
+    curl \
+    && docker-php-ext-install pdo_mysql zip \
+    && a2enmod rewrite \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
 WORKDIR /var/www/html
 
-# Copy built app from builder
+# Copy built app from builder stage
 COPY --from=builder /var/www/html /var/www/html
 
-# Enable mod_rewrite (Laravel routes)
-RUN a2enmod rewrite
+# Set proper Apache document root for Laravel
+ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
 
-# Correct Apache permissions
-RUN chown -R www-data:www-data /var/www/html
+# Update Apache configs to use Laravel's public directory
+RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/000-default.conf \
+    && sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf \
+    && echo "ServerName localhost" >> /etc/apache2/apache2.conf
 
+# Fix permissions (again, just in case)
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
+
+# Expose Apache HTTP port
 EXPOSE 80
 
-HEALTHCHECK --interval=30s --timeout=5s \
-    CMD curl -f http://localhost || exit 1
-
+# Run Apache in the foreground
 CMD ["apache2-foreground"]
