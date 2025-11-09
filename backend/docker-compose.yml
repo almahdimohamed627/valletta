@@ -1,4 +1,3 @@
-
 services:
   valletta:
     build:
@@ -6,7 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: valletta
     restart: unless-stopped
-    posrt:
+    ports:
       - '9000:9000'
     volumes:
       - .:/var/www
@@ -16,14 +15,16 @@ services:
       - proxy
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.nest-app.rule=Host(`${VALLETTA_DOMAIN}`)"
-      - "traefik.http.routers.nest-app.entrypoints=websecure"
-      - "traefik.http.routers.nest-app.tls=true"
-      - "traefik.http.routers.nest-app.tls.certresolver=le"
+      - "traefik.http.routers.valletta.rule=Host(`${VALLETTA_DOMAIN}`)"
+      - "traefik.http.routers.valletta.entrypoints=websecure"
+      - "traefik.http.routers.valletta.tls=true"
+      - "traefik.http.routers.valletta.tls.certresolver=le"
+      - "traefik.http.services.valletta.loadbalancer.server.port=9000"
 
 networks:
   proxy:
     name: proxy
     external: true
+
 volumes:
   mysql_data:
