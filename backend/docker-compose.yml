@@ -6,6 +6,8 @@ services:
       dockerfile: Dockerfile
     container_name: valletta
     restart: unless-stopped
+    posrt:
+      - '9000:9000'
     volumes:
       - .:/var/www
     environment:
