@@ -1,45 +1,22 @@
-# === Stage 1: Builder ===
-FROM php:8.2-fpm AS builder
+FROM php:8.2-apache
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    git curl unzip libpng-dev libonig-dev libxml2-dev zip libzip-dev \
-    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
+# Enable required PHP extensions
+RUN apt-get update && apt-get install -y libpng-dev libjpeg-dev libfreetype6-dev zip git unzip \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install pdo_mysql gd bcmath opcache
 
-# Set working directory
-WORKDIR /var/www
+# Enable Apache rewrite module
+RUN a2enmod rewrite
 
-# Copy composer files and install dependencies first for caching
-COPY composer.json composer.lock ./
+WORKDIR /var/www/html
 
-# Install composer
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
-
-# Copy the entire application source
+# Copy app files
 COPY . .
 
-# Ensure permissions (important for Laravel)
-RUN chown -R www-data:www-data /var/www \
+# Set permissions
+RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 storage bootstrap/cache
 
-# Now install production dependencies
-RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+EXPOSE 80
 
-# === Stage 2: Production Image ===
-FROM php:8.2-fpm
-
-WORKDIR /var/www
-
-# Copy app from builder stage
-COPY --from=builder /var/www /var/www
-
-# Copy nginx config if needed (if you use a custom one)
-# COPY nginx/default.conf /etc/nginx/conf.d/default.conf
-
-# Expose port 80 (if using nginx, or 9000 for PHP-FPM)
-EXPOSE 9000
-
-# Use non-root user
-USER www-data
-
-CMD ["php-fpm"]
+CMD ["apache2-foreground"]
