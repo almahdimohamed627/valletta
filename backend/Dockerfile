@@ -1,33 +1,62 @@
-FROM php:8.2-apache
+# ================================
+# Stage 1: Build dependencies
+# ================================
+FROM php:8.2-apache AS builder
 
-# 1️⃣ System packages
+# Set working directory
+WORKDIR /var/www/html
+
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
-    libpng-dev libjpeg-dev libfreetype6-dev zip git unzip curl \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install pdo_mysql gd bcmath opcache \
+    git \
+    unzip \
+    curl \
+    libzip-dev \
+    zip \
+    && docker-php-ext-install pdo_mysql zip \
     && a2enmod rewrite
+
+# Copy composer and install dependencies
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+# Copy only composer files first to leverage Docker caching
+COPY composer.json composer.lock ./
+
+# Install production dependencies only (no-dev)
+RUN composer install --no-dev --no-interaction --optimize-autoloader --prefer-dist
+
+# Copy application code
+COPY . .
+
+# Make sure Laravel folders are writable
+RUN chown -R www-data:www-data storage bootstrap/cache \
+    && chmod -R 775 storage bootstrap/cache
+
+# ================================
+# Stage 2: Final Production Image
+# ================================
+FROM php:8.2-apache
 
 WORKDIR /var/www/html
 
-# 2️⃣ Copy all application files *first*
-COPY . .
+# Copy Apache configuration for Laravel
+COPY --from=builder /etc/apache2/sites-available/000-default.conf /etc/apache2/sites-available/000-default.conf
 
-# 3️⃣ Install Composer (globally)
-RUN curl -sS https://getcomposer.org/installer | php \
-    -- --install-dir=/usr/local/bin --filename=composer
+# Enable Apache rewrite
+RUN a2enmod rewrite
 
-# 4️⃣ Install dependencies after code is copied
-RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist \
-    && php artisan key:generate || true \
-    && php artisan config:clear || true \
-    && php artisan cache:clear || true
+# Copy the built app from the builder stage
+COPY --from=builder /var/www/html /var/www/html
 
-# 5️⃣ Fix permissions
-RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 775 storage bootstrap/cache
+# Set ownership
+RUN chown -R www-data:www-data /var/www/html
 
-# 6️⃣ Apache configuration
-RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
-
+# Expose Apache port
 EXPOSE 80
+
+# Health check endpoint (optional)
+HEALTHCHECK --interval=30s --timeout=5s \
+    CMD curl -f http://localhost/health || exit 1
+
+# Start Apache in foreground
 CMD ["apache2-foreground"]

@@ -1,19 +1,14 @@
 
-
 services:
   valletta:
     build:
       context: .
       dockerfile: Dockerfile
-    image: valletta:latest
     container_name: valletta
     restart: unless-stopped
-    ports:
-      - "8000:80" # expose on localhost for debugging or Jenkins
     environment:
-      APP_ENV: production
-      APP_DEBUG: "false"
-      SERVICE_NAME: valletta
+      - APP_ENV=production
+      - APP_DEBUG=false
     networks:
       - proxy
     labels:
@@ -22,7 +17,6 @@ services:
       - "traefik.http.routers.valletta.entrypoints=websecure"
       - "traefik.http.routers.valletta.tls=true"
       - "traefik.http.routers.valletta.tls.certresolver=le"
-      - "traefik.http.services.valletta.loadbalancer.server.port=80"
 
 networks:
   proxy:
