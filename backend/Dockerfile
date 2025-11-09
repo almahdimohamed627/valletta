@@ -1,35 +1,33 @@
 FROM php:8.2-apache
 
-# Install system dependencies
+# 1️⃣ System packages
 RUN apt-get update && apt-get install -y \
     libpng-dev libjpeg-dev libfreetype6-dev zip git unzip curl \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install pdo_mysql gd bcmath opcache
-
-# Enable Apache rewrite module
-RUN a2enmod rewrite
+    && docker-php-ext-install pdo_mysql gd bcmath opcache \
+    && a2enmod rewrite
 
 WORKDIR /var/www/html
 
-# Copy composer files first (for better build caching)
-COPY composer.json composer.lock ./
-
-# Install Composer and PHP dependencies
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer \
-    && composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
-
-# Copy the rest of your application
+# 2️⃣ Copy all application files *first*
 COPY . .
 
-# Permissions for Laravel
+# 3️⃣ Install Composer (globally)
+RUN curl -sS https://getcomposer.org/installer | php \
+    -- --install-dir=/usr/local/bin --filename=composer
+
+# 4️⃣ Install dependencies after code is copied
+RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist \
+    && php artisan key:generate || true \
+    && php artisan config:clear || true \
+    && php artisan cache:clear || true
+
+# 5️⃣ Fix permissions
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 storage bootstrap/cache
 
-# Configure Apache
+# 6️⃣ Apache configuration
 RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
 
-# Expose port 80
 EXPOSE 80
-
-# Start Apache
 CMD ["apache2-foreground"]
