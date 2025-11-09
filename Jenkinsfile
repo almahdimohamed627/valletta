@@ -96,8 +96,8 @@ pipeline {
                         sh '''
                             echo "🔍 Checking Laravel application health..."
                             for i in 1 2 3 4 5; do
-                                if curl -s -f http://localhost:9000/api/products >/dev/null 2>&1 || 
-                                   curl -s -f http://localhost:9000 >/dev/null 2>&1; then
+                                if curl -s -f http://localhost:8000/api/products >/dev/null 2>&1 || 
+                                   curl -s -f http://localhost:8000 >/dev/null 2>&1; then
                                     echo "✅ Laravel application is healthy"
                                     break
                                 else
@@ -152,9 +152,9 @@ pipeline {
                         sh '''
                             echo "🔍 Verifying deployment..."
                             for i in 1 2 3 4 5; do
-                                if curl -s -f http://localhost:9000/api/products >/dev/null 2>&1; then
+                                if curl -s -f http://localhost:8000/api/products >/dev/null 2>&1; then
                                     echo "✅ Production deployment successful"
-                                    echo "🌐 Application is accessible at http://localhost:9000"
+                                    echo "🌐 Application is accessible at http://localhost:8000"
                                     break
                                 else
                                     echo "⏳ Attempt $i: Deployment not ready, waiting..."

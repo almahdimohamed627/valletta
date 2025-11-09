@@ -6,7 +6,7 @@ services:
     container_name: valletta
     restart: unless-stopped
     ports:
-      - '9000:9000'
+      - '8000:80'
     volumes:
       - .:/var/www
     environment:
@@ -19,12 +19,9 @@ services:
       - "traefik.http.routers.valletta.entrypoints=websecure"
       - "traefik.http.routers.valletta.tls=true"
       - "traefik.http.routers.valletta.tls.certresolver=le"
-      - "traefik.http.services.valletta.loadbalancer.server.port=9000"
+      - "traefik.http.services.valletta.loadbalancer.server.port=80"
 
 networks:
   proxy:
     name: proxy
     external: true
-
-volumes:
-  mysql_data:
