@@ -96,8 +96,8 @@ pipeline {
                         sh '''
                             echo "🔍 Checking Laravel application health..."
                             for i in 1 2 3 4 5; do
-                                if curl -s -f http://localhost:8000/api/products >/dev/null 2>&1 || 
-                                   curl -s -f http://localhost:8000 >/dev/null 2>&1; then
+                                if curl -s -f http://localhost:9000/api/products >/dev/null 2>&1 || 
+                                   curl -s -f http://localhost:9000 >/dev/null 2>&1; then
                                     echo "✅ Laravel application is healthy"
                                     break
                                 else
@@ -110,7 +110,7 @@ pipeline {
                         // Run Laravel tests inside the container
                         sh """
                             echo "🧪 Running Laravel tests..."
-                            ${composeCmd} exec -T app php artisan test || echo "⚠️ Tests failed but continuing build"
+                            ${composeCmd} exec -T valletta php artisan test || echo "⚠️ Tests failed but continuing build"
                         """
                         
                         sh """
@@ -152,9 +152,9 @@ pipeline {
                         sh '''
                             echo "🔍 Verifying deployment..."
                             for i in 1 2 3 4 5; do
-                                if curl -s -f http://localhost:8000/api/products >/dev/null 2>&1; then
+                                if curl -s -f http://localhost:9000/api/products >/dev/null 2>&1; then
                                     echo "✅ Production deployment successful"
-                                    echo "🌐 Application is accessible at http://localhost:8000"
+                                    echo "🌐 Application is accessible at http://localhost:9000"
                                     break
                                 else
                                     echo "⏳ Attempt $i: Deployment not ready, waiting..."
@@ -175,12 +175,7 @@ pipeline {
         always {
             script {
                 echo "🧹 Cleaning up workspace and temporary files..."
-                dir(env.BACKEND_DIR) {
-                    sh '''
-                        docker compose -f docker-compose.yml down 2>/dev/null || true
-                        rm -f .env 2>/dev/null || true
-                    '''
-                }
+                sh 'rm -f .env'
                 cleanWs()
                 
                 // Clean up Docker images
