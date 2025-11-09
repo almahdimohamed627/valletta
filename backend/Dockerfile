@@ -1,5 +1,5 @@
 # ============================================================
-# 🏗️ Stage 1 — Build and install dependencies
+# 🏗️ Stage 1 — Build Laravel and install dependencies
 # ============================================================
 FROM composer:2 AS builder
 
@@ -21,23 +21,19 @@ RUN php artisan config:clear || true \
     && php artisan view:clear || true \
     && php artisan optimize || true
 
-# Fix permissions for cache and storage
-RUN chown -R www-data:www-data storage bootstrap/cache \
+# Fix permissions for storage and cache
+RUN mkdir -p storage/framework/cache/data \
+    && chown -R www-data:www-data storage bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
-
 
 # ============================================================
 # 🚀 Stage 2 — Production runtime (Apache + PHP)
 # ============================================================
 FROM php:8.2-apache
 
-# Install required PHP extensions and dependencies
+# Install required PHP extensions
 RUN apt-get update && apt-get install -y \
-    git \
-    unzip \
-    libzip-dev \
-    zip \
-    curl \
+    git unzip libzip-dev zip curl \
     && docker-php-ext-install pdo_mysql zip \
     && a2enmod rewrite \
     && rm -rf /var/lib/apt/lists/*
@@ -45,23 +41,23 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /var/www/html
 
-# Copy built app from builder stage
+# Copy app from builder
 COPY --from=builder /var/www/html /var/www/html
 
-# Set proper Apache document root for Laravel
+# Set Apache document root to Laravel's public folder
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
 
-# Update Apache configs to use Laravel's public directory
+# Update Apache configs
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/000-default.conf \
     && sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf \
     && echo "ServerName localhost" >> /etc/apache2/apache2.conf
 
-# Fix permissions (again, just in case)
+# Fix permissions
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
-# Expose Apache HTTP port
+# Expose port 80
 EXPOSE 80
 
-# Run Apache in the foreground
+# Start Apache
 CMD ["apache2-foreground"]
