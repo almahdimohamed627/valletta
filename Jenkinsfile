@@ -178,11 +178,7 @@ pipeline {
                 sh 'rm -f .env'
                 cleanWs()
                 
-                // Clean up Docker images
-                sh '''
-                    docker rmi ${APP_NAME}:${BUILD_NUMBER} 2>/dev/null || true
-                    docker rmi ${APP_NAME}:latest 2>/dev/null || true
-                '''
+
             }
         }
         success {
