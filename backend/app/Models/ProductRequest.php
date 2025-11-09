@@ -7,6 +7,31 @@ use Illuminate\Database\Eloquent\Model;
 
 class ProductRequest extends Model
 {
-    /** @use HasFactory<\Database\Factories\ProductRequestFactory> */
     use HasFactory;
+
+    protected $fillable = [
+        'user_id',
+        'product_id',
+        'quantity',
+        'status',
+        'notes'
+    ];
+
+    protected $casts = [
+        'quantity' => 'integer'
+    ];
+
+    protected $attributes = [
+        'status' => 'pending'
+    ];
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function product()
+    {
+        return $this->belongsTo(Product::class);
+    }
 }
