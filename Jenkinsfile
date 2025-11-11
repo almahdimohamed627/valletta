@@ -62,8 +62,6 @@ pipeline {
 
                         sh '''
                             docker build \
-                                --no-cache \
-                                --pull \
                                 -t ${APP_NAME}:${BUILD_NUMBER} \
                                 -t ${APP_NAME}:latest .
                         '''
