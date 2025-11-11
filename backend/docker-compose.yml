@@ -12,7 +12,6 @@ services:
       - APP_DEBUG=false
       - APP_KEY=base64:YOUR_APP_KEY_HERE
     volumes:
-      - ./:/var/www/html
       - storage-data:/var/www/html/storage
       - cache-data:/var/www/html/bootstrap/cache
     networks:
