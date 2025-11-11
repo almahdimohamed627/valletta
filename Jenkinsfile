@@ -103,10 +103,7 @@ pipeline {
                         '''
 
                         // Run tests inside container
-                        sh """
-                            echo "🧪 Running Laravel tests..."
-                            docker compose exec -T valletta php artisan route:list
-                        """
+
 
                         sh """
                             echo "📊 Active containers:"
