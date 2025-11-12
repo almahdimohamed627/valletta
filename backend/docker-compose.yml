@@ -7,6 +7,8 @@ services:
       dockerfile: Dockerfile
     container_name: valletta
     restart: unless-stopped
+    env_file:
+      - .env  # ← Add this line to load environment variables from .env file
     volumes:
       - storage-data:/var/www/html/storage
       - cache-data:/var/www/html/bootstrap/cache
