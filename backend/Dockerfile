@@ -15,13 +15,13 @@ RUN apt-get update && apt-get install -y \
     libzip-dev \
     nodejs \
     npm \
-    libpq-dev  # ← Add this for PostgreSQL
+    libpq-dev
 
 # Clear cache
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install PHP extensions including PostgreSQL
-RUN docker-php-ext-install pdo pdo_pgsql pdo_mysql mbstring exif pcntl bcmath gd  # ← Add pdo_pgsql
+RUN docker-php-ext-install pdo pdo_pgsql pdo_mysql mbstring exif pcntl bcmath gd
 
 # Enable Apache modules
 RUN a2enmod rewrite
@@ -38,7 +38,7 @@ RUN composer install --no-scripts --no-autoloader --no-dev
 # Install Node.js dependencies
 RUN npm install
 
-# Copy application code
+# Copy application code (this includes ALL files)
 COPY . .
 
 # Create Laravel cache directories and set proper permissions
@@ -55,8 +55,14 @@ RUN chgrp -R www-data /var/www/html/storage \
 # Copy Apache virtual host configuration
 COPY apache-config.conf /etc/apache2/sites-available/000-default.conf
 
+# Build frontend assets (if using Vite)
+RUN npm run build
+
 # Optimize Laravel for production
 RUN composer dump-autoload --optimize
+RUN php artisan config:cache
+RUN php artisan route:cache
+RUN php artisan view:cache
 
 # Expose port
 EXPOSE 80

@@ -7,16 +7,9 @@ services:
       dockerfile: Dockerfile
     container_name: valletta
     restart: unless-stopped
-    environment:
-      - APP_ENV=production
-      - APP_DEBUG=false
-      - APP_KEY=base64:YOUR_APP_KEY_HERE
     volumes:
       - storage-data:/var/www/html/storage
       - cache-data:/var/www/html/bootstrap/cache
-      - ./:/var/www/html
-      - /var/www/html/node_modules
-      - /var/www/html/vendor
     networks:
       - proxy
     labels:
