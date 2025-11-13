@@ -20,10 +20,6 @@ return new class extends Migration
             $table->boolean('is_admin')->default(false);
             $table->rememberToken();
             $table->foreignId('current_team_id')->nullable();
-            $table->foreignId('product_category_id')
-                  ->nullable()
-                  ->constrained('product_categories')
-                  ->onDelete('set null');
             $table->string('profile_photo_path', 2048)->nullable();
             $table->timestamps();
         });
