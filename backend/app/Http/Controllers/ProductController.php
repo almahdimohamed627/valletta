@@ -7,6 +7,7 @@ use App\Models\ProductCategory;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class ProductController extends Controller
 {
@@ -14,9 +15,11 @@ class ProductController extends Controller
     {
         // Only show active products with active categories
         $query = Product::where('is_active', true)
-            ->with(['categories' => function($query) {
-                $query->where('is_active', true); // Only load active categories
-            }]);
+            ->with([
+                'categories' => function ($query) {
+                    $query->where('is_active', true); // Only load active categories
+                }
+            ]);
 
         // Filter by multiple category NAMES (AND logic - must have ALL categories)
         if ($request->has('categories') && $request->categories) {
@@ -32,7 +35,7 @@ class ProductController extends Controller
             foreach ($categoryNames as $categoryName) {
                 $query->whereHas('categories', function ($q) use ($categoryName) {
                     $q->where(DB::raw('LOWER(name)'), $categoryName)
-                      ->where('is_active', true); // Only consider active categories
+                        ->where('is_active', true); // Only consider active categories
                 });
             }
         }
@@ -43,7 +46,7 @@ class ProductController extends Controller
 
             $query->whereHas('categories', function ($q) use ($categoryName) {
                 $q->where(DB::raw('LOWER(name)'), $categoryName)
-                  ->where('is_active', true); // Only consider active categories
+                    ->where('is_active', true); // Only consider active categories
             });
         }
 
@@ -60,7 +63,7 @@ class ProductController extends Controller
 
             $query->whereHas('categories', function ($q) use ($strictCategoryNames) {
                 $q->whereIn(DB::raw('LOWER(name)'), $strictCategoryNames)
-                  ->where('is_active', true); // Only consider active categories
+                    ->where('is_active', true); // Only consider active categories
             }, '>=', $categoryCount);
         }
 
@@ -121,9 +124,11 @@ class ProductController extends Controller
     public function show($id): JsonResponse
     {
         $product = Product::where('is_active', true)
-            ->with(['categories' => function($query) {
-                $query->where('is_active', true); // Only load active categories
-            }])
+            ->with([
+                'categories' => function ($query) {
+                    $query->where('is_active', true); // Only load active categories
+                }
+            ])
             ->find($id);
 
         if (!$product) {
@@ -148,16 +153,17 @@ class ProductController extends Controller
             ], 403);
         }
 
-        // First validate the basic fields
+        // Validate all fields including image
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'price' => 'required|numeric|min:1000|max:10000000',
-            'image_url' => 'nullable|url',
+            'image' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:2048', // Added webp format
             'categories' => 'required|array',
+            'categories.*' => 'string|exists:product_categories,name' // Validate each category
         ]);
 
-        // Manually validate that categories exist and are active
+        // Validate categories exist and are active
         $categoryNames = $validated['categories'];
         $activeCategories = ProductCategory::whereIn('name', $categoryNames)
             ->where('is_active', true)
@@ -165,27 +171,29 @@ class ProductController extends Controller
             ->toArray();
 
         $invalidCategories = array_diff($categoryNames, $activeCategories);
-        
+
         if (!empty($invalidCategories)) {
             return response()->json([
                 'success' => false,
                 'message' => 'The following categories are invalid or inactive: ' . implode(', ', $invalidCategories),
-                'errors' => [
-                    'categories' => ['Invalid or inactive categories: ' . implode(', ', $invalidCategories)]
-                ]
+                'errors' => ['categories' => $invalidCategories]
             ], 422);
         }
 
         DB::beginTransaction();
         try {
+            // Store image and get path
+            $imagePath = $request->file('image')->store('products', 'public');
+
+            // Create product with image path
             $product = Product::create([
                 'name' => $validated['name'],
                 'description' => $validated['description'],
                 'price' => $validated['price'],
-                'image_url' => $validated['image_url'] ?? null,
+                'image' => $imagePath, // Store the path, not URL
             ]);
 
-            // Find ACTIVE categories by name and attach them
+            // Attach categories
             $categoryIds = ProductCategory::whereIn('name', $validated['categories'])
                 ->where('is_active', true)
                 ->pluck('id')
@@ -197,13 +205,19 @@ class ProductController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => $product->load(['categories' => function($query) {
-                    $query->where('is_active', true);
-                }]),
+                'data' => $product->load([
+                    'categories' => function ($query) {
+                        $query->where('is_active', true);
+                    }
+                ]),
                 'message' => 'Product created successfully'
             ], 201);
         } catch (\Exception $e) {
             DB::rollBack();
+            // Delete the uploaded image if product creation fails
+            if (isset($imagePath)) {
+                Storage::disk('public')->delete($imagePath);
+            }
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create product: ' . $e->getMessage()
@@ -229,17 +243,18 @@ class ProductController extends Controller
             ], 404);
         }
 
-        // First validate the basic fields
+        // Validate fields - image is optional in update
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
             'description' => 'nullable|string',
             'price' => 'sometimes|numeric|min:1000|max:10000000',
-            'image_url' => 'nullable|url',
+            'image' => 'sometimes|image|mimes:jpeg,png,jpg,gif,webp|max:2048', // Handle file upload
             'is_active' => 'sometimes|boolean',
             'categories' => 'sometimes|array',
+            'categories.*' => 'string|exists:product_categories,name'
         ]);
 
-        // If categories are being updated, validate they exist and are active
+        // If categories are being updated, validate them
         if (isset($validated['categories'])) {
             $categoryNames = $validated['categories'];
             $activeCategories = ProductCategory::whereIn('name', $categoryNames)
@@ -248,29 +263,33 @@ class ProductController extends Controller
                 ->toArray();
 
             $invalidCategories = array_diff($categoryNames, $activeCategories);
-            
+
             if (!empty($invalidCategories)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'The following categories are invalid or inactive: ' . implode(', ', $invalidCategories),
-                    'errors' => [
-                        'categories' => ['Invalid or inactive categories: ' . implode(', ', $invalidCategories)]
-                    ]
+                    'errors' => ['categories' => $invalidCategories]
                 ], 422);
             }
         }
 
         DB::beginTransaction();
         try {
+            // Handle new image upload
+            if ($request->hasFile('image')) {
+                $imagePath = $request->file('image')->store('products', 'public');
+                $validated['image'] = $imagePath;
+            }
+
             $product->update([
                 'name' => $validated['name'] ?? $product->name,
                 'description' => $validated['description'] ?? $product->description,
                 'price' => $validated['price'] ?? $product->price,
-                'image_url' => $validated['image_url'] ?? $product->image_url,
+                'image' => $validated['image'] ?? $product->image, // Use the new path or keep existing
                 'is_active' => $validated['is_active'] ?? $product->is_active,
             ]);
 
-            // If categories are provided, sync with ACTIVE categories
+            // If categories are provided, sync them
             if (isset($validated['categories'])) {
                 $categoryIds = ProductCategory::whereIn('name', $validated['categories'])
                     ->where('is_active', true)
@@ -284,13 +303,19 @@ class ProductController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => $product->load(['categories' => function($query) {
-                    $query->where('is_active', true);
-                }]),
+                'data' => $product->load([
+                    'categories' => function ($query) {
+                        $query->where('is_active', true);
+                    }
+                ]),
                 'message' => 'Product updated successfully'
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
+            // Delete the new uploaded image if update fails
+            if (isset($imagePath)) {
+                Storage::disk('public')->delete($imagePath);
+            }
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to update product: ' . $e->getMessage()
@@ -320,7 +345,7 @@ class ProductController extends Controller
         try {
             // Option 1: Soft delete by making inactive (recommended)
             $product->update(['is_active' => false]);
-            
+
             // Option 2: If you want hard delete, uncomment below and comment the line above
             // $product->categories()->detach();
             // $product->delete();
