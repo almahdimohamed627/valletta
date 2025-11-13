@@ -13,7 +13,7 @@ Route::post('/login', [AuthController::class, 'login']);
 // Guest routes (view products and categories)
 Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/{id}', [ProductController::class, 'show']);
-# Route::get('/categories', [ProductCategoryController::class, 'index']);
+Route::get('/categories', [ProductCategoryController::class, 'index']);
 # Route::get('/categories/{id}', [ProductCategoryController::class, 'show']);
 
 // Protected routes
