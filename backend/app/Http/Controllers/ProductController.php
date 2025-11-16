@@ -226,102 +226,119 @@ class ProductController extends Controller
     }
 
     public function update(Request $request, $id): JsonResponse
-    {
-        if (!auth()->user()->is_admin) {
+{
+    if (!auth()->user()->is_admin) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Unauthorized'
+        ], 403);
+    }
+
+    $product = Product::find($id);
+
+    if (!$product) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Product not found'
+        ], 404);
+    }
+
+    // Validate fields - image is optional in update
+    $validated = $request->validate([
+        'name' => 'sometimes|string|max:255',
+        'description' => 'nullable|string',
+        'price' => 'sometimes|numeric|min:1000|max:10000000',
+        'image' => 'sometimes|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
+        'is_active' => 'sometimes|boolean',
+        'categories' => 'sometimes|array',
+        'categories.*' => 'sometimes|string|exists:product_categories,name'
+    ]);
+
+    // If categories are being updated, validate them
+    if (isset($validated['categories'])) {
+        $categoryNames = $validated['categories'];
+        $activeCategories = ProductCategory::whereIn('name', $categoryNames)
+            ->where('is_active', true)
+            ->pluck('name')
+            ->toArray();
+
+        $invalidCategories = array_diff($categoryNames, $activeCategories);
+
+        if (!empty($invalidCategories)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Unauthorized'
-            ], 403);
-        }
-
-        $product = Product::find($id);
-
-        if (!$product) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Product not found'
-            ], 404);
-        }
-
-        // Validate fields - image is optional in update
-        $validated = $request->validate([
-            'name' => 'sometimes|string|max:255',
-            'description' => 'nullable|string',
-            'price' => 'sometimes|numeric|min:1000|max:10000000',
-            'image' => 'sometimes|image|mimes:jpeg,png,jpg,gif,webp|max:2048', // Handle file upload
-            'is_active' => 'sometimes|boolean',
-            'categories' => 'sometimes|array',
-            'categories.*' => 'sometimes|string|exists:product_categories,name'
-        ]);
-
-        // If categories are being updated, validate them
-        if (isset($validated['categories'])) {
-            $categoryNames = $validated['categories'];
-            $activeCategories = ProductCategory::whereIn('name', $categoryNames)
-                ->where('is_active', true)
-                ->pluck('name')
-                ->toArray();
-
-            $invalidCategories = array_diff($categoryNames, $activeCategories);
-
-            if (!empty($invalidCategories)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'The following categories are invalid or inactive: ' . implode(', ', $invalidCategories),
-                    'errors' => ['categories' => $invalidCategories]
-                ], 422);
-            }
-        }
-
-        DB::beginTransaction();
-        try {
-            // Handle new image upload
-            if ($request->hasFile('image')) {
-                $imagePath = $request->file('image')->store('products', 'public');
-                $validated['image'] = $imagePath;
-            }
-
-            $product->update([
-                'name' => $validated['name'] ?? $product->name,
-                'description' => $validated['description'] ?? $product->description,
-                'price' => $validated['price'] ?? $product->price,
-                'image' => $validated['image'] ?? $product->image, // Use the new path or keep existing
-                'is_active' => $validated['is_active'] ?? $product->is_active,
-            ]);
-
-            // If categories are provided, sync them
-            if (isset($validated['categories'])) {
-                $categoryIds = ProductCategory::whereIn('name', $validated['categories'])
-                    ->where('is_active', true)
-                    ->pluck('id')
-                    ->toArray();
-
-                $product->categories()->sync($categoryIds);
-            }
-
-            DB::commit();
-
-            return response()->json([
-                'success' => true,
-                'data' => $product->load([
-                    'categories' => function ($query) {
-                        $query->where('is_active', true);
-                    }
-                ]),
-                'message' => 'Product updated successfully'
-            ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            // Delete the new uploaded image if update fails
-            if (isset($imagePath)) {
-                Storage::disk('public')->delete($imagePath);
-            }
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to update product: ' . $e->getMessage()
-            ], 500);
+                'message' => 'The following categories are invalid or inactive: ' . implode(', ', $invalidCategories),
+                'errors' => ['categories' => $invalidCategories]
+            ], 422);
         }
     }
+
+    DB::beginTransaction();
+    try {
+        // Handle new image upload
+        if ($request->hasFile('image')) {
+            $imagePath = $request->file('image')->store('products', 'public');
+            $validated['image'] = $imagePath;
+        }
+
+        // Build update data only for provided fields
+        $updateData = [];
+        $fields = ['name', 'description', 'price', 'image', 'is_active'];
+        
+        foreach ($fields as $field) {
+            if (isset($validated[$field])) {
+                $updateData[$field] = $validated[$field];
+            }
+        }
+
+        // Only update if there are changes
+        if (!empty($updateData)) {
+            $product->update($updateData);
+        }
+
+        // If categories are provided, sync them
+        if (isset($validated['categories'])) {
+            $categoryIds = ProductCategory::whereIn('name', $validated['categories'])
+                ->where('is_active', true)
+                ->pluck('id')
+                ->toArray();
+
+            $product->categories()->sync($categoryIds);
+        }
+
+        DB::commit();
+
+        // Reload the product with fresh data
+        $product->refresh();
+
+        return response()->json([
+            'success' => true,
+            'data' => $product->load([
+                'categories' => function ($query) {
+                    $query->where('is_active', true);
+                }
+            ]),
+            'message' => 'Product updated successfully'
+        ]);
+    } catch (\Exception $e) {
+        DB::rollBack();
+        // Delete the new uploaded image if update fails
+        if (isset($imagePath)) {
+            Storage::disk('public')->delete($imagePath);
+        }
+        
+        \Log::error('Product update failed:', [
+            'error' => $e->getMessage(),
+            'product_id' => $id,
+            'request_data' => $request->all()
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to update product: ' . $e->getMessage()
+        ], 500);
+    }
+}
 
     public function destroy($id): JsonResponse
     {
