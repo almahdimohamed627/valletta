@@ -251,7 +251,7 @@ class ProductController extends Controller
             'image' => 'sometimes|image|mimes:jpeg,png,jpg,gif,webp|max:2048', // Handle file upload
             'is_active' => 'sometimes|boolean',
             'categories' => 'sometimes|array',
-            'categories.*' => 'string|exists:product_categories,name'
+            'categories.*' => 'sometimes|string|exists:product_categories,name'
         ]);
 
         // If categories are being updated, validate them
@@ -344,17 +344,17 @@ class ProductController extends Controller
         DB::beginTransaction();
         try {
             // Option 1: Soft delete by making inactive (recommended)
-            $product->update(['is_active' => false]);
+            //$product->update(['is_active' => false]);
 
             // Option 2: If you want hard delete, uncomment below and comment the line above
-            // $product->categories()->detach();
-            // $product->delete();
+             $product->categories()->detach();
+             $product->delete();
 
             DB::commit();
 
             return response()->json([
                 'success' => true,
-                'message' => 'Product deleted successfully (made inactive)'
+                'message' => 'Product deleted successfully'
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
