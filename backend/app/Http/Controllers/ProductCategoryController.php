@@ -74,7 +74,7 @@ class ProductCategoryController extends Controller
                     // Reactivate the existing inactive category
                     $existingCategory->update([
                         'is_active' => true,
-                       // 'description' => $validated['description'] ?? $existingCategory->description
+                        'description' => $validated['description'] ?? $existingCategory->description
                     ]);
 
                     DB::commit();
