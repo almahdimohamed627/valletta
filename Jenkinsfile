@@ -143,10 +143,24 @@ pipeline {
                                 echo "🗃️ Running database migrations..."
                                 docker compose exec -T valletta php artisan migrate --force
 
-                                echo "🔧 Optimizing Laravel..."
+                                echo "🧹 Clearing Laravel cache..."
+                                docker compose exec -T valletta php artisan config:clear
+                                docker compose exec -T valletta php artisan route:clear
+                                docker compose exec -T valletta php artisan view:clear
+                                docker compose exec -T valletta php artisan cache:clear
+                                docker compose exec -T valletta php artisan event:clear
+
+                                echo "🔧 Recreating storage link..."
+                                docker compose exec -T valletta php artisan storage:link
+
+                                echo "⚡ Optimizing Laravel..."
                                 docker compose exec -T valletta php artisan config:cache
                                 docker compose exec -T valletta php artisan route:cache
                                 docker compose exec -T valletta php artisan view:cache
+                                docker compose exec -T valletta php artisan optimize
+
+                                echo "🔒 Restarting PHP-FPM to clear opcache..."
+                                docker compose exec -T valletta pkill -USR2 php-fpm || docker compose exec -T valletta service php-fpm reload || echo "PHP-FPM restart not available"
                             '''
                         }
 
