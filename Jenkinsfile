@@ -129,13 +129,24 @@ pipeline {
                                 chmod 600 .env
 
                                 echo "🛑 Stopping old containers..."
-                                docker compose --env-file .env down --remove-orphans || true
+                                docker compose down --remove-orphans || true
 
                                 echo "🏗️ Rebuilding and starting services..."
-                                docker compose --env-file .env up -d --build
+                                docker compose up -d --build
 
-                                echo "⏳ Waiting for containers to stabilize..."
-                                sleep 60
+                                echo "⏳ Waiting for services to initialize..."
+                                sleep 30
+
+                                echo "🔍 Checking environment variables in container..."
+                                docker compose exec -T valletta printenv | grep DB_
+
+                                echo "🗃️ Running database migrations..."
+                                docker compose exec -T valletta php artisan migrate --force
+
+                                echo "🔧 Optimizing Laravel..."
+                                docker compose exec -T valletta php artisan config:cache
+                                docker compose exec -T valletta php artisan route:cache
+                                docker compose exec -T valletta php artisan view:cache
                             '''
                         }
 
@@ -143,7 +154,7 @@ pipeline {
                             echo "🔍 Running production health check..."
                             for i in 1 2 3 4 5; do
                                 if curl -s -f http://localhost >/dev/null 2>&1 || \
-                                   curl -s -f http://localhost/api/products >/dev/null 2>&1; then
+                                curl -s -f http://localhost/api/products >/dev/null 2>&1; then
                                     echo "✅ Deployment successful and healthy"
                                     break
                                 else
@@ -152,12 +163,13 @@ pipeline {
                                 fi
                             done
 
-                            docker compose --env-file .env ps
+                            docker compose ps
                         '''
                     }
                 }
             }
         }
+        
     }
 
     post {
