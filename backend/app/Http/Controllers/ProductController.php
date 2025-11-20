@@ -40,32 +40,32 @@ class ProductController extends Controller
             }
         }
 
-        // Filter by single category name
-        if ($request->has('category_name') && $request->category_name) {
-            $categoryName = strtolower(trim($request->category_name));
+        // // Filter by single category name
+        // if ($request->has('category_name') && $request->category_name) {
+        //     $categoryName = strtolower(trim($request->category_name));
 
-            $query->whereHas('categories', function ($q) use ($categoryName) {
-                $q->where(DB::raw('LOWER(name)'), $categoryName)
-                    ->where('is_active', true); // Only consider active categories
-            });
-        }
+        //     $query->whereHas('categories', function ($q) use ($categoryName) {
+        //         $q->where(DB::raw('LOWER(name)'), $categoryName)
+        //             ->where('is_active', true); // Only consider active categories
+        //     });
+        // }
 
-        // Alternative: Using HAVING COUNT for strict AND logic (more precise)
-        if ($request->has('strict_categories') && $request->strict_categories) {
-            $strictCategoryNames = is_array($request->strict_categories)
-                ? $request->strict_categories
-                : explode(',', $request->strict_categories);
+        // // Alternative: Using HAVING COUNT for strict AND logic (more precise)
+        // if ($request->has('strict_categories') && $request->strict_categories) {
+        //     $strictCategoryNames = is_array($request->strict_categories)
+        //         ? $request->strict_categories
+        //         : explode(',', $request->strict_categories);
 
-            $strictCategoryNames = array_map('trim', $strictCategoryNames);
-            $strictCategoryNames = array_map('strtolower', $strictCategoryNames);
+        //     $strictCategoryNames = array_map('trim', $strictCategoryNames);
+        //     $strictCategoryNames = array_map('strtolower', $strictCategoryNames);
 
-            $categoryCount = count($strictCategoryNames);
+        //     $categoryCount = count($strictCategoryNames);
 
-            $query->whereHas('categories', function ($q) use ($strictCategoryNames) {
-                $q->whereIn(DB::raw('LOWER(name)'), $strictCategoryNames)
-                    ->where('is_active', true); // Only consider active categories
-            }, '>=', $categoryCount);
-        }
+        //     $query->whereHas('categories', function ($q) use ($strictCategoryNames) {
+        //         $q->whereIn(DB::raw('LOWER(name)'), $strictCategoryNames)
+        //             ->where('is_active', true); // Only consider active categories
+        //     }, '>=', $categoryCount);
+        // }
 
         // Filter by price range
         if ($request->has('min_price') && $request->min_price) {
@@ -76,18 +76,18 @@ class ProductController extends Controller
             $query->where('price', '<=', $request->max_price);
         }
 
-        // Search by product name or description
-        if ($request->has('search') && $request->search) {
-            $query->where(function ($q) use ($request) {
-                $q->where('name', 'like', '%' . $request->search . '%')
-                    ->orWhere('description', 'like', '%' . $request->search . '%');
-            });
-        }
+        // // Search by product name or description
+        // if ($request->has('search') && $request->search) {
+        //     $query->where(function ($q) use ($request) {
+        //         $q->where('name', 'like', '%' . $request->search . '%')
+        //             ->orWhere('description', 'like', '%' . $request->search . '%');
+        //     });
+        // }
 
-        // Filter by stock availability
-        if ($request->has('in_stock') && $request->in_stock) {
-            $query->where('stock', '>', 0);
-        }
+        // // Filter by stock availability
+        // if ($request->has('in_stock') && $request->in_stock) {
+        //     $query->where('stock', '>', 0);
+        // }
 
         // Sorting
         $sortBy = $request->get('sort_by', 'created_at');
@@ -117,7 +117,7 @@ class ProductController extends Controller
                 'from' => $products->firstItem(),
                 'to' => $products->lastItem(),
             ],
-            'filters' => $request->only(['categories', 'strict_categories', 'category_name', 'search', 'min_price', 'max_price', 'in_stock'])
+            'filters' => $request->only(['categories', 'min_price', 'max_price'])
         ]);
     }
 
@@ -284,7 +284,7 @@ class ProductController extends Controller
         // Build update data only for provided fields
         $updateData = [];
         $fields = ['name', 'description', 'price', 'image', 'is_active'];
-        
+
         foreach ($fields as $field) {
             if (isset($validated[$field])) {
                 $updateData[$field] = $validated[$field];
@@ -326,13 +326,13 @@ class ProductController extends Controller
         if (isset($imagePath)) {
             Storage::disk('public')->delete($imagePath);
         }
-        
+
         \Log::error('Product update failed:', [
             'error' => $e->getMessage(),
             'product_id' => $id,
             'request_data' => $request->all()
         ]);
-        
+
         return response()->json([
             'success' => false,
             'message' => 'Failed to update product: ' . $e->getMessage()
