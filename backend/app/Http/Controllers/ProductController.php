@@ -284,7 +284,11 @@ class ProductController extends Controller
         // Build update data only for provided fields
         $updateData = [];
         $fields = ['name', 'description', 'price', 'image', 'is_active'];
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> f3c5a42 (fixed update product)
         foreach ($fields as $field) {
             if (isset($validated[$field])) {
                 $updateData[$field] = $validated[$field];
@@ -326,13 +330,21 @@ class ProductController extends Controller
         if (isset($imagePath)) {
             Storage::disk('public')->delete($imagePath);
         }
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> f3c5a42 (fixed update product)
         \Log::error('Product update failed:', [
             'error' => $e->getMessage(),
             'product_id' => $id,
             'request_data' => $request->all()
         ]);
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> f3c5a42 (fixed update product)
         return response()->json([
             'success' => false,
             'message' => 'Failed to update product: ' . $e->getMessage()
